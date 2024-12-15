@@ -28,7 +28,7 @@ The project uses:
 - **`TradingView/MACD/`**: Contains a TradingView Pine Script for visualizing the strategy on TradingView:
   - **`MACD_with_ATR_Trading_Strategy.pine`**: A Pine Script strategy to visualize the MACD divergence strategy and ATR-based stop-loss/take-profit levels directly on TradingView.
 
-**How the Strategy Works**  
+## How the Strategy Works  
 The **MACD Divergence Strategy** identifies divergence between the price of an asset and the MACD indicator. The program detects MACD peaks and introduces a minimum difference threshold between the MACD peak and the price, which helps reduce trade frequency and enhances the strategy's success rate.
 
 Additionally, the strategy incorporates **(ATR)** to dynamically adjust stop-loss and take-profit levels based on market volatility, providing more flexibility in different market conditions.

@@ -1,0 +1,115 @@
+//@version=5
+strategy("MACD with ATR Trading Strategy", overlay=true)
+
+// Input for MACD parameters
+fastLength = input.int(13, title="MACD Fast Length")
+slowLength = input.int(34, title="MACD Slow Length")
+signalLength = input.int(9, title="MACD Signal Length")
+
+// Input for decrease percentage
+decreasePercentage = input.float(0.2, title="Decrease Percentage", minval=0.0, maxval=1.0)
+
+// ATR parameters
+length = input.int(13, title="ATR Length", minval=1)
+m = input.float(1.0, title="ATR Multiplier")
+
+// Input for standard deviation length
+sdLength = input.int(13, title="Standard Deviation Length")
+sdMultiplier = input.float(1.5, title="Standard Deviation Multiplier", step=0.1)
+
+// Calculate the standard deviation
+sdValue = ta.stdev(close, sdLength)
+
+// Calculate MACD
+[macdLine, signalLine, macdHist] = ta.macd(close, fastLength, slowLength, signalLength)
+
+// Initialize arrays to hold peak values and corresponding closing prices
+var float[] peakValues = array.new_float() // Peak values array
+var float[] closePrices = array.new_float() // Closing prices array
+
+// Reset variables at the start of each bar
+highlightPeak = false // Initialize as a boolean
+buySignal = false // Initialize buy signal
+var bool isInPosition = false // Track whether we are in a buy position
+
+// Conditions for identifying the peak of the negative MACD histogram
+condition1 = macdHist[1] <= macdHist[2]     // T-1 <= T-2
+condition2 = macdHist > macdHist[1]          // T > T-1
+condition3 = macdHist[2] < 0 and macdHist[1] < 0 and macdHist < 0 // T-2 < 0, T-1 < 0, T < 0
+
+// Store the peak value at T-1 and corresponding closing price if conditions are met
+if (condition1 and condition2 and condition3)
+    array.push(peakValues, macdHist[1]) // Save the peak value at T-1
+    array.push(closePrices, close[1])    // Save the closing price at T-1
+    highlightPeak := true // Set to true if conditions are met
+    // Check if we have at least two peak values to evaluate
+    if array.size(peakValues) >= 2
+        // Get the last two peak values and closing prices
+        peakCurrent = array.get(peakValues, array.size(peakValues) - 1) // T-1
+        peakPrevious = array.get(peakValues, array.size(peakValues) - 2) // T-2
+        
+        closeCurrent = array.get(closePrices, array.size(closePrices) - 1) // Closing price at T-1
+        closePrevious = array.get(closePrices, array.size(closePrices) - 2) // Closing price at T-2
+
+        // Check if the peak at T-1 is greater than the specified percentage of T-2
+        conditionDecrease = peakPrevious * (1 - decreasePercentage) < peakCurrent // Check if T-1 is greater than the percentage of T-2
+        
+        // If the decrease condition is satisfied
+        if conditionDecrease
+            if closePrevious - sdMultiplier * sdValue > closeCurrent and not isInPosition
+                buySignal := true // Set the buy signal
+
+// Calculate ATR
+ma_function(source, length) => ta.rma(source, length)
+
+atrValue = ma_function(ta.tr(true), length) * m // ATR value
+atrHigh = atrValue + high // ATR High
+atrLow = low - atrValue // ATR Low
+
+// Initialize variables for storing buy-related values
+var float buyPrice = na
+var float atrLowAtBuy = na
+var float atrValueAtBuy = na
+var float stopProfitTarget = na
+// Check for the buying signal conditions
+if buySignal
+    buyPrice := close          // Store the closing price at T = 0
+    atrLowAtBuy := atrLow      // Store atrLow at T = 0
+    atrValueAtBuy := atrValue  // Store ATR value at T = 0
+    isInPosition := true          // Set flag indicating we are in a position
+    stopProfitTarget := buyPrice + 1.5 * (buyPrice - atrLowAtBuy) // Calculate the stop profit target: buyPrice + 1.5 * atrValue at T = 0
+    // Display ATR, Stop Loss, and Stop Profit values on the chart
+    label.new(bar_index, high, text="ATR: " + str.tostring(atrValueAtBuy, format.mintick) + "\n" + "Stop Loss: " + str.tostring(atrLowAtBuy, format.mintick) + "\n" + "Stop Profit: " + str.tostring(stopProfitTarget, format.mintick), style=label.style_label_down, color=color.green, textcolor=color.white, size=size.small)
+// Condition for stop loss (price falls below atrLow at T = 0)
+stopLossCondition = close <= atrLowAtBuy
+
+// Condition for stop profit (price rises above stop profit target)
+stopProfitCondition = close >= stopProfitTarget
+
+// Selling signal if either stop loss or stop profit condition is met
+sellSignal = false
+if isInPosition
+    if stopLossCondition or stopProfitCondition
+        sellSignal := true  // Trigger the sell signal
+        isInPosition := false // Exit position after selling
+        // Reset variables
+        buyPrice := na
+        atrLowAtBuy := na
+        atrValueAtBuy := na
+
+// Execute trades based on signals
+if buySignal
+    strategy.entry("Buy", strategy.long, stop=close[1]) // Buy order at close price
+if sellSignal
+    strategy.close("Buy") // Close position
+
+// Plotting shapes for MACD peaks on the previous bar
+plotshape(highlightPeak and bar_index > 0, style=shape.triangledown, location=location.abovebar, color=color.yellow, size=size.tiny, title="MACD Peak", text="Peak", offset=-1)
+//Prevent excessive memory usage
+if array.size(peakValues) > 100
+    array.shift(peakValues)
+    array.shift(closePrices)
+
+// Smaller entry/exit markers
+plotshape(buySignal, style=shape.labelup, location=location.belowbar, color=color.green, size=size.tiny, title="Buy Signal", text="Buy")
+plotshape(sellSignal, style=shape.labeldown, location=location.abovebar, color=color.red, size=size.tiny, title="Sell Signal", text="Sell")

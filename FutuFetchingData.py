@@ -17,7 +17,7 @@ def fetch_futu_data(stock_code, start_date, end_date, ktype='K_30M', max_count=5
     """
 
     "Input your own host and port number"
-    quote_ctx = OpenQuoteContext(host='', port=00000)
+    quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
 
     # Request historical data
     ret, data, page_req_key = quote_ctx.request_history_kline(stock_code, start=start_date, end=end_date, ktype=ktype,
